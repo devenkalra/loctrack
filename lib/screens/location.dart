@@ -1,0 +1,387 @@
+import 'package:osm_nominatim/osm_nominatim.dart';
+import 'package:xml/xml.dart';
+import 'package:http/http.dart' as http;
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_background_geolocation/flutter_background_geolocation.dart'
+    as bg;
+import 'package:flutter_map/flutter_map.dart';
+import 'package:map_controller/map_controller.dart';
+import 'package:latlong/latlong.dart' as latLng;
+import 'package:loctrack/models/location.dart';
+import 'dart:developer' as dvl;
+import 'dart:async';
+import 'dart:math';
+
+class Place {
+  Place(String n, [latLng.LatLng? l = null]) {
+    _name = n;
+    _location = l;
+  }
+
+  String _name = "";
+  latLng.LatLng? _location = null;
+
+  String get name => _name;
+
+  latLng.LatLng? get location => _location;
+}
+
+
+Future<http.Response> getCitiesByLatLng(latLng.LatLng l) {
+  double c_lat = l.latitude;
+  double c_lng = l.longitude;
+  String query = 'node(around:20000.00,$c_lat,$c_lng)["place"="city"];out body;';
+  dvl.log("Query:"+query);
+  return http.post(Uri.parse('https://overpass-api.de/api/interpreter'),
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: query);
+}
+
+Future getCitiesBy(latLng.LatLng l) async {
+  final searchResult = await Nominatim.searchByName(
+    query:
+        'node(around:500000.00,37.25598,-122.02803)["place"="city"];out body;out skel;',
+    limit: 1,
+    addressDetails: true,
+    extraTags: true,
+    nameDetails: true,
+  );
+  final reverseSearchResult = await Nominatim.reverseSearch(
+    lat: 50.1,
+    lon: 6.2,
+    addressDetails: true,
+    extraTags: true,
+    nameDetails: true,
+  );
+}
+
+var LatLng = latLng.LatLng;
+
+class MapDisplayState extends State<MapDisplay> {
+  var _location = LocationModel();
+  List<Place>? _places;
+
+  late MapController mapController;
+  late StatefulMapController statefulMapController;
+  late StreamSubscription<StatefulMapControllerStateChange> sub;
+  late FlutterMap _map;
+
+  MapDisplayState() {
+    mapController = MapController();
+    statefulMapController = StatefulMapController(mapController: mapController);
+    // wait for the controller to be ready before using it
+    statefulMapController.onReady
+        .then((_) => print("The map controller is ready"));
+
+    /// [Important] listen to the changefeed to rebuild the map on changes:
+    /// this will rebuild the map when for example addMarker or any method
+    /// that mutates the map assets is called
+    sub =
+        statefulMapController.changeFeed.listen((change) => {setState(() {})});
+  }
+
+  @override
+  void initState() {
+    //dvl.log("Init State Map State");
+    super.initState();
+    _location = widget.location;
+    _places = widget.places;
+    //dvl.log("IS location:" + widget.location.mapCenter.toString());
+  }
+
+  @override
+  void didUpdateWidget(old) {
+    //dvl.log("Old:" + old.location.mapCenter.toString());
+    super.didUpdateWidget(old);
+    _places = widget.places;
+    mapController.move(_location.mapCenter, _location.zoom);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    //dvl.log("Context: " + context.toString());
+    //dvl.log("Map State Builder");
+    //dvl.log("Location:" + _location.mapCenter.toString());
+    int numPlaces = _places == null ? 0 : _places!.length;
+
+    List<Marker> markers = List<Marker>.generate(
+        numPlaces + 1,
+        (index) => Marker(
+            width: 80.0,
+            height: 80.0,
+            point: _location.mapCenter,
+            builder: (ctx) => Container(
+                  child: Container(
+                    child: CustomPaint(
+                      painter: OpenPainter(0, 0),
+                    ),
+                  ),
+                )));
+    markers.clear();
+    markers.add(Marker(
+        width: 80.0,
+        height: 80.0,
+        point: _location.mapCenter,
+        builder: (ctx) => Container(
+          child: Container(
+            child: CustomPaint(
+              painter: OpenPainter(0, 0),
+            ),
+          ),
+        )));
+    dvl.log("Num of Places:" + _places!.length.toString());
+    for(Place place in _places!){
+      markers.add(Marker(
+          width: 80.0,
+          height: 80.0,
+          point: place.location,
+          builder: (ctx) => Container(
+            child: Container(
+              child: CustomPaint(
+                painter: OpenPainter(0, 0),
+              ),
+            ),
+          )));
+    }
+
+    return GestureDetector(
+        onTap: () {
+          dvl.log("Tapped");
+        },
+        child: FlutterMap(
+          mapController: mapController,
+          options: MapOptions(
+            center: _location.mapCenter,
+            zoom: 15.0,
+          ),
+          layers: [
+            TileLayerOptions(
+              urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              subdomains: ['a', 'b', 'c'],
+            ),
+            MarkerLayerOptions(
+              markers: markers,
+            ),
+          ],
+        ));
+  }
+}
+
+class MapDisplay extends StatefulWidget {
+  var location = LocationModel();
+  List<Place>? places;
+
+  MapDisplay(this.location, this.places, {Key? key}) : super(key: key) {
+    //dvl.log("Map Display Location:" + this.location.mapCenter.toString());
+  }
+
+  @override
+  State<MapDisplay> createState() {
+    //dvl.log("Creating Map Display State");
+    return MapDisplayState();
+  }
+/*
+
+  Function(dynamic tapPosition, latLng.LatLng) createOnTap(location) {
+    var _onTap = (tapPos, latLng) {
+      dvl.log("Map Tap");
+      dvl.log(tapPos.toString());
+      dvl.log(latLng.toString());
+      map.location.updateMapCenter(latLng);
+    };
+    return _onTap;
+  }
+
+  Widget myMap() {
+    return this.map;
+  }
+
+  Widget topLevel(context, location, child) {
+    dvl.log("Location Map Center:${location.mapCenter}");
+    return Container(
+        width: MediaQuery.of(context).size.width,
+        height: MediaQuery.of(context).size.height,
+        child: GestureDetector(
+            onTap: () {
+              dvl.log("Tap on Map");
+            },
+            child: myMap()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Consumer<LocationModel>(
+          builder: (context, location, child) =>
+              topLevel(context, location, child))
+    ]);
+  }
+
+   */
+}
+
+class LocationDisplayState extends State<LocationDisplay> {
+  LocationModel location = LocationModel();
+  List<Place>? places=[];
+
+  @override
+  Widget build(BuildContext context) {
+    //dvl.log("LDS:" + location.toString());
+    //dvl.log("LDS center:" + location.mapCenter.toString());
+    var mapDisplay = MapDisplay(location, places);
+    return Stack(children: [
+      Container(child: mapDisplay),
+      IgnorePointer(
+          child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.red,
+                ),
+                borderRadius: BorderRadius.circular(10.0),
+              ),
+              child:
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Column(mainAxisAlignment: MainAxisAlignment.start, children: [
+                  Text(location.locationAltitude.toStringAsFixed(0),
+                      style: TextStyle(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 80,
+                      )),
+                  Text(location.locationLat.toStringAsFixed(4),
+                      style: TextStyle(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 40,
+                      )),
+                  Text(location.locationLng.toStringAsFixed(4),
+                      style: TextStyle(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 40,
+                      ))
+                ])
+              ]))),
+      Column(children: [
+        ElevatedButton(
+            child: Text(
+              "Forward",
+              style: TextStyle(fontSize: 20),
+            ),
+            onPressed: this.refreshCitiesAndMoveMap),
+        ElevatedButton(
+          child: Text(
+            "Back",
+            style: TextStyle(fontSize: 20),
+          ),
+          onPressed: moveBack,
+        )
+      ])
+    ]);
+  }
+
+  int _timeOutCounter = 0;
+
+  void handleTimeout(
+      [List<double> delta = const [0.001, 0.002]]) {
+    //dvl.log("State == MoveMap");
+    //dvl.log("Lcation center:" + location.mapCenter.toString());
+    setState(() {
+      location.mapCenter = location.moveLatLng(location.mapCenter, delta);
+    });
+    //dvl.log("Updated Lcation center:" + location.mapCenter.toString());
+  }
+
+  List<Place> getPlaces(http.Response p) {
+    //aprint(p.body.toString());
+    final document = XmlDocument.parse(p.body);
+    var nodes = document.findAllElements('node');
+    List<Place> places = List<Place>.generate(0, (index) => Place("", null));
+    places.clear();
+    for (var node in nodes) {
+      String? latS = node.getAttribute("lat");
+      String? lngS = node.getAttribute("lon");
+      latLng.LatLng? location = null;
+      if (latS != null && lngS != null) {
+        location = latLng.LatLng(double.parse(latS), double.parse(lngS));
+      }
+      var tags = node.findAllElements("tag");
+      for (var tag in tags) {
+        //print ("Tag:" + tag.attributes.toString());
+        var key = tag.getAttribute("k");
+        String? name;
+        if (key == "name") {
+          name = tag.getAttribute("v");
+          if (name == null) {
+            name = "";
+          }
+          places.add(Place(name, location));
+        }
+      }
+    }
+    return places;
+  }
+
+  void refreshCitiesAndMoveMap() {
+    List<Place>? places;
+    getCitiesByLatLng(location.mapCenter).then((p) => moveMap(getPlaces(p)));
+  }
+
+  void moveMap(List<Place>? places) {
+    this.places = places;
+    _timeOutCounter = 0;
+    for (_timeOutCounter = 0; _timeOutCounter < 20; _timeOutCounter++) {
+      Timer(Duration(milliseconds: _timeOutCounter * 100),
+          () => handleTimeout([0.001, 0.0001]));
+    }
+    for (_timeOutCounter = 20; _timeOutCounter < 40; _timeOutCounter++) {
+      Timer(Duration(milliseconds: _timeOutCounter * 100),
+          () => handleTimeout([0.001, -0.0005]));
+    }
+  }
+
+  void moveBack() {
+    //dvl.log("State == MoveMap");
+    //dvl.log("Lcation center:" + location.mapCenter.toString());
+    setState(() {
+      location.mapCenter = location.moveLatLngBack(location.mapCenter);
+    });
+    //dvl.log("Updated Lcation center:" + location.mapCenter.toString());
+  }
+}
+
+class LocationDisplay extends StatefulWidget {
+  const LocationDisplay({Key? key}) : super(key: key);
+
+  @override
+  LocationDisplayState createState() => LocationDisplayState();
+}
+
+class OpenPainter extends CustomPainter {
+  var x = 0.0;
+  var y = 0.0;
+
+  OpenPainter(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    var paint1 = Paint()
+      ..color = Color(0xffaa44aa)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(x, y), 10, paint1);
+    final paint = Paint()
+      ..color = Color(0xffaa44aa)
+      ..strokeWidth = 4;
+    //canvas.drawLine(Offset(27, 632), Offset(x, y), paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => true;
+}
