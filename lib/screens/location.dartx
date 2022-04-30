@@ -28,12 +28,12 @@ class Place {
   latLng.LatLng? get location => _location;
 }
 
-
 Future<http.Response> getCitiesByLatLng(latLng.LatLng l) {
   double c_lat = l.latitude;
   double c_lng = l.longitude;
-  String query = 'node(around:20000.00,$c_lat,$c_lng)["place"="city"];out body;';
-  dvl.log("Query:"+query);
+  String query =
+      'node(around:20000.00,$c_lat,$c_lng)["place"="city"];out body;';
+  dvl.log("Query:" + query);
   return http.post(Uri.parse('https://overpass-api.de/api/interpreter'),
       headers: <String, String>{
         'Content-Type': 'application/json; charset=UTF-8',
@@ -127,25 +127,25 @@ class MapDisplayState extends State<MapDisplay> {
         height: 80.0,
         point: _location.mapCenter,
         builder: (ctx) => Container(
-          child: Container(
-            child: CustomPaint(
-              painter: OpenPainter(0, 0),
-            ),
-          ),
-        )));
+              child: Container(
+                child: CustomPaint(
+                  painter: OpenPainter(0, 0),
+                ),
+              ),
+            )));
     dvl.log("Num of Places:" + _places!.length.toString());
-    for(Place place in _places!){
+    for (Place place in _places!) {
       markers.add(Marker(
           width: 80.0,
           height: 80.0,
           point: place.location,
           builder: (ctx) => Container(
-            child: Container(
-              child: CustomPaint(
-                painter: OpenPainter(0, 0),
-              ),
-            ),
-          )));
+                child: Container(
+                  child: CustomPaint(
+                    painter: OpenPainter(0, 0),
+                  ),
+                ),
+              )));
     }
 
     return GestureDetector(
@@ -226,7 +226,7 @@ class MapDisplay extends StatefulWidget {
 
 class LocationDisplayState extends State<LocationDisplay> {
   LocationModel location = LocationModel();
-  List<Place>? places=[];
+  List<Place>? places = [];
 
   @override
   Widget build(BuildContext context) {
@@ -286,12 +286,11 @@ class LocationDisplayState extends State<LocationDisplay> {
 
   int _timeOutCounter = 0;
 
-  void handleTimeout(
-      [List<double> delta = const [0.001, 0.002]]) {
+  void handleTimeout([List<double> delta = const [0.001, 0.002]]) {
     //dvl.log("State == MoveMap");
     //dvl.log("Lcation center:" + location.mapCenter.toString());
     setState(() {
-      location.mapCenter = location.moveLatLng(location.mapCenter, delta);
+      location.setMapCenter(location.moveLatLng(location.mapCenter, delta));
     });
     //dvl.log("Updated Lcation center:" + location.mapCenter.toString());
   }
@@ -348,14 +347,14 @@ class LocationDisplayState extends State<LocationDisplay> {
     //dvl.log("State == MoveMap");
     //dvl.log("Lcation center:" + location.mapCenter.toString());
     setState(() {
-      location.mapCenter = location.moveLatLngBack(location.mapCenter);
+      location.setMapCenter(location.moveLatLngBack(location.mapCenter));
     });
     //dvl.log("Updated Lcation center:" + location.mapCenter.toString());
   }
 }
 
 class LocationDisplay extends StatefulWidget {
-  const LocationDisplay({Key? key}) : super(key: key);
+  LocationDisplay(center, {Key? key}) : super(key: key);
 
   @override
   LocationDisplayState createState() => LocationDisplayState();

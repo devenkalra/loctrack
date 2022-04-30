@@ -1,0 +1,31 @@
+area["name"="Île-de-France"]->.boundaryarea;
+(
+node(area.boundaryarea)["aeroway"="aerodrome"];
+way(area.boundaryarea)["aeroway"="aerodrome"];>;
+relation(area.boundaryarea)["aeroway"="aerodrome"];>>;
+);
+out meta;
+
+
+node(around:20000.00,37.26898, -122.02903)["place"="city"];out body;
+node(around:20000.00,37.26898, -122.02903)["aeroway"="aerodrome"];out body;
+
+(
+node(around:20000.00,37.26898, -122.02903)["aeroway"="aerodrome"];
+way(around:20000.00,37.26898, -122.02903)["aeroway"="aerodrome"];>;
+relation(around:20000.00,37.26898, -122.02903)["aeroway"="aerodrome"];>>;
+);
+out meta;
+
+ bool nodeHasTag(XmlNode node, String tagAttribute, String tagAttributeValue,
+      {String? value = null}) {
+    var tags = node.findAllElements("tag");
+    for (var tag in tags) {
+      print("Tag:"+tag.toString())
+      var key = tag.getAttribute(tagAttribute);
+      if (key == tagAttributeValue) {
+        return true;
+      }
+    }
+    return false;
+  }
