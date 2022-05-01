@@ -97,6 +97,10 @@ class MapState {
     _zoom = z;
   }
 
+  void set altitude(double a){
+    _altitude = a;
+  }
+
   dynamic location([LatLng l = null]){
     if (l != null) {
       _location.latitude = l.latitude;

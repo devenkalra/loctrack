@@ -36,7 +36,7 @@ import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 import 'dart:async';
 import 'dart:math' as math;
-
+import 'package:image/image.dart';
 import 'package:complex/fastmath.dart';
 
 //import 'package:loctrack/screens/location.dartx';
@@ -56,7 +56,7 @@ class MyMap extends StatefulWidget {
 
 class _MyMapState extends State<MyMap> {
   final TILE_SIZE = 512;
-  double width = 60, height = 1200;
+  double width = 768, height = 1634; //780;
   final PI = 3.1415927;
 
   List<double> deg2num(LatLng l, double zoom) {
@@ -78,8 +78,7 @@ class _MyMapState extends State<MyMap> {
     LatLng(lat_deg, lon_deg);
   }
 
-  @override
-  Widget build(BuildContext context) {
+  void loadAndDisplayTiles() async{
     List<double> d_t = deg2num(widget.center, widget.zoom);
     print("D:${d_t[0]}, ${d_t[1]}");
     List<int> t = [d_t[0].toInt(), d_t[1].toInt()];
@@ -93,15 +92,70 @@ class _MyMapState extends State<MyMap> {
     if (nYTiles % 2 == 1) {
       nYTiles++;
     }
+    nYTiles +=2 ;
+    nXTiles += 2;
+
+    double xScale = width.toDouble()/(nXTiles * TILE_SIZE);
+    double yScale = height.toDouble()/(nYTiles * TILE_SIZE);
     print("nXTiles=${nXTiles}, nYTiles=${nYTiles}");
     int xOffset = ((d_t[0] - t[0]) * TILE_SIZE).toInt();
     int yOffset = ((d_t[1] - t[1]) * TILE_SIZE).toInt();
 
+    print("Offset:${xOffset}, ${yOffset}");
     List<Widget> rows = [];
     String iUrl = "";
-    int startYTile = t[1] - (nYTiles / 2 + 0.1).toInt();
+
+    int htRemainingTop = height ~/2 - yOffset;
+    int htRemainingBottom = height ~/ 2 - (TILE_SIZE - yOffset);
+
+    print("htRT:${htRemainingTop} htRB:${htRemainingBottom}");
+    int nTopTiles = (htRemainingTop / TILE_SIZE).ceil();
+    int partialTopPixels = htRemainingTop - (nTopTiles -1) * TILE_SIZE;
+
+    int nBottomTiles = (htRemainingBottom / TILE_SIZE).ceil();
+    int partialBottomPixels = htRemainingBottom - (nBottomTiles -1 ) * TILE_SIZE;
+
+
+    print("nTop:${nTopTiles} pTP:${partialTopPixels} nBt:${nBottomTiles} pBP:${partialBottomPixels}");
+
+
+    int htRemainingLeft = width ~/2 - xOffset;
+    int htRemainingRight = width ~/ 2 - (TILE_SIZE - xOffset);
+
+    print("htRL:${htRemainingLeft} htRR:${htRemainingRight}");
+    int nLeftTiles = (htRemainingLeft / TILE_SIZE).ceil();
+    int partialLeftPixels = htRemainingLeft - (nLeftTiles -1) * TILE_SIZE;
+
+    int nRightTiles = (htRemainingRight / TILE_SIZE).ceil();
+    int partialRightPixels = htRemainingRight - (nRightTiles -1 ) * TILE_SIZE;
+
+    print("nLeft:${nLeftTiles} pTL:${partialLeftPixels} nRt:${nRightTiles} pRP:${partialRightPixels}");
+
+    //
+    //
+    //
+    nYTiles = 3;
+    nXTiles = 1;
+    // TOP
+
+    int startYTile = t[1] - nTopTiles;
+    int startXTile = t[1] - nLeftTiles;
+
+    var response = await http.get(url);
+    var image = decodeImage(response.bodyBytes);
+
+  }
+  @override
+  Widget build(BuildContext context) {
+
+    await loadAndDisplayTiles();
+
+    // Top Left
+
+
     for (int y = 0; y < nYTiles; y++) {
       int startXTile = t[0] - (nXTiles / 2 + 0.1).toInt();
+      startXTile = t[0];
       List<Widget> cols = [];
       for (int x = 0; x < nXTiles; x++) {
         String url =
@@ -109,86 +163,28 @@ class _MyMapState extends State<MyMap> {
         print(url);
         iUrl = url;
         startXTile++;
-        cols.add(Container(
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(width: 2.0, color: Color(0xFFFFFFFF)),
-                left: BorderSide(width: 2.0, color: Color(0xFFFFFFFF)),
-                right: BorderSide(width: 2.0, color: Color(0xFFFF0000)),
-                bottom: BorderSide(width: 2.0, color: Color(0xFFFF0000)),
-              ),
-            ),
-            child: Image(
+        cols.add(Image(
               image: NetworkImage(url)
-            )));
+            ));
       }
       startYTile++;
       rows.add(Row(children: cols));
     }
 
     return  Container(
-      alignment:Alignment.center,
+      alignment:Alignment.topLeft,
       child:ClipRect(
         child:Align(
-          heightFactor: 0.5,
-            widthFactor: 1.0,
-            alignment: Alignment(-1.0, -1.0),
+          heightFactor: 1,
+            widthFactor: 1,
+            alignment: Alignment(0.0, 0),
             child:Column(children:rows)   //Image.network(iUrl)
         )
       )
     );
 
-    return SizedBox(
-        width:1000,
-        height:100,
-        child:ClipOval(
-        child: Container(
-            child: Align(
-                alignment: Alignment.center,
-                widthFactor: 0.4,
-                heightFactor: 0.5,
-                child: Image.network(iUrl)
-                ))));
   }
 
   _MyMapState() : super() {}
 }
 
-class WrapExample extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      height: 480,
-      child: Card(
-        child: Wrap(
-          direction: Axis.horizontal,
-          spacing: 8.0, // gap between adjacent chips
-          runSpacing: 4.0, // gap between lines
-          children: <Widget>[
-            Chip(
-              avatar: CircleAvatar(
-                  backgroundColor: Colors.blue.shade900, child: Text('AH')),
-              label: Text('Hamilton'),
-            ),
-            Chip(
-              avatar: CircleAvatar(
-                  backgroundColor: Colors.blue.shade900, child: Text('ML')),
-              label: Text('Lafayette'),
-            ),
-            Chip(
-              avatar: CircleAvatar(
-                  backgroundColor: Colors.blue.shade900, child: Text('HM')),
-              label: Text('Mulligan'),
-            ),
-            Chip(
-              avatar: CircleAvatar(
-                  backgroundColor: Colors.blue.shade900, child: Text('JL')),
-              label: Text('Laurens'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+//import 'dart:html';
 import 'dart:io';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:map_controller/map_controller.dart';
@@ -15,14 +16,76 @@ import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 import 'dart:async';
 import 'dart:math' show cos, sqrt, asin;
-import 'map.dart';
 
 //import 'package:loctrack/screens/location.dartx';
 import 'package:window_size/window_size.dart';
 import 'dart:developer';
 import 'package:latlong/latlong.dart';
-//import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:location/location.dart';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:location/location.dart';
+
+
+import 'package:flutter_cache_manager/src/storage/file_system/file_system.dart' as c;
+import 'package:path_provider/path_provider.dart';
+/*
+class IOFileSystem implements c.FileSystem {
+  final Future<Directory> _fileDir;
+
+  IOFileSystem(String key) : _fileDir = createDirectory(key);
+
+  static Future<Directory> createDirectory(String key) async {
+    // use documents directory instead of temp
+    var baseDir = await getApplicationDocumentsDirectory();
+    var path = p.join(baseDir.path, key);
+
+    var fs = const LocalFileSystem();
+    var directory = fs.directory((path));
+    await directory.create(recursive: true);
+    return directory;
+  }
+
+  @override
+  Future<File> createFile(String name) async {
+    assert(name != null);
+    return (await _fileDir).childFile(name);
+  }
+}
+*/
+
+
+class CachedTileProvider extends TileProvider {
+  final CacheManager cacheManager = CacheManager(
+      Config(
+          'tiles',
+          maxNrOfCacheObjects: 20,
+          stalePeriod: const Duration(days: 3),
+         // fileSystem: IOFileSystem('tiles'),
+      )
+  );
+  CachedTileProvider();
+
+  @override
+  ImageProvider getImage(Coords<num> coords, TileLayerOptions options) {
+
+    print("+++++++ Image Provider");
+    print("TLO:"+options.toString());
+    print("GTU:"+ getTileUrl(coords, options));
+    print("Coords:" + coords.toString());
+    print("key:"+"${coords.x}-${coords.y}-${coords.z}");
+
+    return CachedNetworkImageProvider(
+      getTileUrl(coords, options),
+      cacheManager: cacheManager,
+      cacheKey: "${coords.x}-${coords.y}-${coords.z}"
+      //Now you can set options that determine how the image gets cached via whichever plugin you use.
+    );
+  }
+}
 
 void main() {
   log("In Main");
@@ -30,8 +93,8 @@ void main() {
   runApp(MyApp());
 }
 
-const double windowWidth = 800;
-const double windowHeight = 1000;
+const double windowWidth = 400;
+const double windowHeight = 600;
 
 void setupWindow() {
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -58,7 +121,13 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: LocApp(),
+      home: Scaffold(
+        appBar:AppBar(
+          toolbarHeight: 30,
+            title:Text("LocTrack")
+        ),
+        body:LocApp()
+      ),
     );
   }
 }
@@ -75,18 +144,25 @@ class LocApp extends StatefulWidget {
 class _LocAppState extends State<LocApp> {
   AppState _state = AppState();
   CitiesManager citiesManager;
+  LocationManager locationManager;
 
   void _handleCitiesUpdate(dynamic d) {
     //dvl.log("Handle Cities Update");
     setState(() {});
   }
+  void _handleLocationUpdate(LocationData d) {
+    //dvl.log("Handle Cities Update");
+    print("HandleLocationUpdate: ${d.latitude}, ${d.longitude}, ${d.altitude}");
+    setLocation(d.latitude, d.longitude, d.altitude);
 
+  }
   _LocAppState() : super() {
     _state.lastMarkerUpdateLocation(_state.mapState.location());
     citiesManager = CitiesManager(
         geoMarkersState: _state.markerState,
         citiesUpdated: _handleCitiesUpdate);
-    // ##### citiesManager.updateCitiesAroundLocation(_state.lastMarkerUpdateLocation());
+    locationManager = LocationManager(0.1, 0.1, _handleLocationUpdate);
+    citiesManager.updateCitiesAroundLocation(_state.lastMarkerUpdateLocation());
   }
 
   /**
@@ -138,6 +214,15 @@ class _LocAppState extends State<LocApp> {
     }
   }
 
+  void setLocation(lat,long, altitude) {
+    dvl.log("setLocation");
+    LatLng l = LatLng(lat, long);
+    _state.mapState.updateLocation(l);
+    _state.mapState.altitude = altitude;
+    updateMarkerDataIfNeeded();
+    setState(() {});
+  }
+
   void moveLocation(double x_speed, double y_speed) {
     dvl.log("moveLocation");
     LatLng l = _state.mapState.location();
@@ -182,7 +267,10 @@ class _LocAppState extends State<LocApp> {
             LatLng(_state.mapState.mapCenterLat, _state.mapState.mapCenterLng),
         name: "My Location"));
 */
-    return MyMap(center:LatLng(37.25898, -122.02903), zoom:15);
+    final buttonTextFont = 10.0;
+    final bigButtonWidth = 50.0;
+    final bigButtonHeight = 15.0;
+
     return Stack(textDirection: TextDirection.ltr, children: [
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Column(mainAxisAlignment: MainAxisAlignment.start, children: [
@@ -195,20 +283,26 @@ class _LocAppState extends State<LocApp> {
           height: 200,
           child: Column(children: [
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              ElevatedButton(
+                SizedBox(
+                    width: bigButtonWidth,
+                    height: bigButtonHeight,
+                    child:ElevatedButton(
                   child: Text(
                     "Forward",
-                    style: TextStyle(fontSize: 20),
+                    style: TextStyle(fontSize: buttonTextFont),
                   ),
-                  onPressed: () => moveLocation(0, 1))
+                  onPressed: () => moveLocation(0, 1)))
             ]),
             Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              ElevatedButton(
+              SizedBox(
+                  width: bigButtonWidth,
+                  height: bigButtonHeight,
+                  child:ElevatedButton(
                   child: Text(
                     "Left",
-                    style: TextStyle(fontSize: 20),
+                    style: TextStyle(fontSize: buttonTextFont),
                   ),
-                  onPressed: () => moveLocation(-1, 0)),
+                  onPressed: () => moveLocation(-1, 0))),
               SizedBox(
                   width: 20,
                   height: 20,
@@ -218,34 +312,46 @@ class _LocAppState extends State<LocApp> {
                         style: TextStyle(fontSize: 10),
                       ),
                       onPressed: () => moveLocation(0, 0))),
-              ElevatedButton(
+              SizedBox(
+                  width: bigButtonWidth,
+                  height: bigButtonHeight,
+                  child:ElevatedButton(
                   child: Text(
                     "Right",
-                    style: TextStyle(fontSize: 20),
+                    style: TextStyle(fontSize: buttonTextFont),
                   ),
-                  onPressed: () => moveLocation(1, 0))
+                  onPressed: () => moveLocation(1, 0)))
             ]),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              ElevatedButton(
+              SizedBox(
+                  width: bigButtonWidth,
+                  height: bigButtonHeight,
+                  child:ElevatedButton(
                   child: Text(
                     "Down",
-                    style: TextStyle(fontSize: 20),
+                    style: TextStyle(fontSize: buttonTextFont),
                   ),
-                  onPressed: () => moveLocation(0, -1))
+                  onPressed: () => moveLocation(0, -1)))
             ]),Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              ElevatedButton(
+        SizedBox(
+            width: bigButtonWidth,
+            height: bigButtonHeight,
+            child:ElevatedButton(
                   child: Text(
                     "Zoom In",
-                    style: TextStyle(fontSize: 20),
+                    style: TextStyle(fontSize: buttonTextFont),
                   ),
-                  onPressed: () => zoomIn())
+                  onPressed: () => zoomIn()))
             ]),Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              ElevatedButton(
+        SizedBox(
+            width: bigButtonWidth,
+            height: bigButtonHeight,
+            child:ElevatedButton(
                   child: Text(
                     "Zoom Out",
-                    style: TextStyle(fontSize: 20),
+                    style: TextStyle(fontSize: buttonTextFont),
                   ),
-                  onPressed: () => zoomOut())
+                  onPressed: () => zoomOut()))
             ]),
           ])),
     ]);
@@ -267,6 +373,34 @@ class Place {
 
   LatLng get location => _location;
 }
+
+
+class LocationManager{
+  final ValueChanged<LocationData> locationUpdated;
+  double deltaLatitude = 0.1;
+  double deltaLongitude = 0.1;
+  Timer locationUpdateTimer;
+  Location location;
+  final locationPollTime = 10000;
+  LocationManager(this.deltaLatitude, this.deltaLongitude, this.locationUpdated) {
+    location = new Location();
+
+    void locationCallback(){
+      dvl.log("Executing");
+      location.getLocation().then((LocationData position){
+        print("Position=${position.toString()}");
+        this.locationUpdated(position);
+      });
+      locationUpdateTimer = Timer(Duration(milliseconds: locationPollTime), locationCallback );
+    }
+    locationUpdateTimer = Timer(Duration(milliseconds: locationPollTime), locationCallback );
+  }
+
+  void locationChangeHappened(){
+
+  }
+}
+
 
 class CitiesManager {
   GeoMarkersState geoMarkersState;
@@ -633,6 +767,7 @@ class _LocMapState extends State<LocMap> {
                   urlTemplate:
                       "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
                   subdomains: ['a', 'b', 'c'],
+                    tileProvider:  CachedTileProvider()
                 ),
                 MarkerLayerOptions(markers: markers),
               ],
@@ -643,13 +778,13 @@ class _LocMapState extends State<LocMap> {
 }
 
 class OpenPainter extends CustomPainter {
-  var x = 0.0;
-  var y = 0.0;
+  double x = 0.0;
+  double y = 0.0;
   Color fillColor = Colors.pink;
 
   String text = "";
 
-  OpenPainter(x, y, fillColor, text) {
+  OpenPainter(double x, double y, fillColor, text) {
     this.x = x;
     this.y = y;
     this.fillColor = fillColor;

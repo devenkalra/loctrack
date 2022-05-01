@@ -23,15 +23,20 @@ environment:
 dependencies:
   vector_math: any
   complex: any
-  flutter_background_geolocation: any
-  #flutter_map_tile_caching: any
-  background_fetch : any
+  location: ^4.2.0
+  js: ^0.6.0
+  #flutter_background_geolocation: any
+  #background_fetch : any
   latlng: any
   map_controller: any
-  flutter_map: any
+  flutter_map: "<0.13.0"
   provider: any
   osm_nominatim: any
   xml: any
+  image: any
+  cached_network_image: any
+  flutter_cache_manager: any
+  path_provider: any
   http: any
   # plugin is not yet part of the flutter framework
   window_size:
